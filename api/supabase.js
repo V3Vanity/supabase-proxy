@@ -1,16 +1,18 @@
 export default async function handler(req, res) {
   const SUPABASE_URL = 'https://vimfydojltitzoibxsfn.supabase.co';
   
-  // Получаем путь запроса (убираем /api/supabase)
+  // Получаем путь (убираем /api/supabase и добавляем оставшуюся часть)
   let path = req.url.replace('/api/supabase', '');
   
-  // Если путь пустой или / - добавляем /auth/v1/health для проверки
+  // Если путь пустой, шлём запрос к health
   if (path === '' || path === '/') {
     path = '/auth/v1/health';
   }
   
   const fetchUrl = SUPABASE_URL + path;
   const method = req.method;
+  
+  console.log('🔄 Прокси:', method, fetchUrl);
   
   // CORS заголовки
   const corsHeaders = {
@@ -20,7 +22,7 @@ export default async function handler(req, res) {
     'Access-Control-Max-Age': '86400',
   };
   
-  // Обработка OPTIONS (предзапрос)
+  // Предзапрос OPTIONS
   if (method === 'OPTIONS') {
     res.writeHead(204, corsHeaders);
     res.end();
@@ -28,13 +30,10 @@ export default async function handler(req, res) {
   }
   
   try {
-    console.log('Проксируем:', method, fetchUrl);
-    
-    // Подготавливаем заголовки
+    // Копируем заголовки, убирая проблемные
     const headers = {};
-    for (let [key, value] of Object.entries(req.headers)) {
-      // Пропускаем проблемные заголовки
-      if (key === 'host' || key === 'origin' || key === 'referer') continue;
+    for (const [key, value] of Object.entries(req.headers)) {
+      if (['host', 'origin', 'referer', 'accept-encoding'].includes(key)) continue;
       headers[key] = value;
     }
     
@@ -43,22 +42,27 @@ export default async function handler(req, res) {
       headers: headers,
     };
     
-    // Добавляем тело для методов, которые могут его иметь
     if (method !== 'GET' && method !== 'HEAD' && req.body) {
       fetchOptions.body = JSON.stringify(req.body);
     }
     
     const response = await fetch(fetchUrl, fetchOptions);
-    const data = await response.json();
+    const data = await response.text();
+    
+    // Определяем Content-Type из ответа Supabase
+    let contentType = 'application/json';
+    if (response.headers.get('content-type')) {
+      contentType = response.headers.get('content-type');
+    }
     
     res.writeHead(response.status, {
       ...corsHeaders,
-      'Content-Type': 'application/json',
+      'Content-Type': contentType,
     });
-    res.end(JSON.stringify(data));
+    res.end(data);
     
   } catch (error) {
-    console.error('Proxy error:', error);
+    console.error('❌ Ошибка:', error);
     res.writeHead(500, {
       ...corsHeaders,
       'Content-Type': 'application/json',
