@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/auth/v1/:path*",
+      "destination": "/api/supabase/auth/v1/:path*"
+    },
+    {
+      "source": "/rest/v1/:path*",
+      "destination": "/api/supabase/rest/v1/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/api/supabase/$1"
+    }
+  ]
+}
