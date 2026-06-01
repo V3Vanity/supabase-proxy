@@ -1,19 +1,22 @@
 export default async function handler(req, res) {
   const SUPABASE_URL = 'https://vimfydojltitzoibxsfn.supabase.co';
   
-  // Получаем путь запроса
-  const url = req.url;
-  const path = url.replace('/api/supabase', '');
-  const fetchUrl = SUPABASE_URL + path;
+  // Получаем путь запроса (убираем /api/supabase)
+  let path = req.url.replace('/api/supabase', '');
   
-  // Метод запроса
+  // Если путь пустой или / - добавляем /auth/v1/health для проверки
+  if (path === '' || path === '/') {
+    path = '/auth/v1/health';
+  }
+  
+  const fetchUrl = SUPABASE_URL + path;
   const method = req.method;
   
-  // CORS заголовки — расширенные
+  // CORS заголовки
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey, Prefer, X-Client-Info, X-Client-Info-Version',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey, Prefer, X-Client-Info',
     'Access-Control-Max-Age': '86400',
   };
   
@@ -25,29 +28,29 @@ export default async function handler(req, res) {
   }
   
   try {
-    // Подготавливаем заголовки для запроса к Supabase
+    console.log('Проксируем:', method, fetchUrl);
+    
+    // Подготавливаем заголовки
     const headers = {};
     for (let [key, value] of Object.entries(req.headers)) {
+      // Пропускаем проблемные заголовки
       if (key === 'host' || key === 'origin' || key === 'referer') continue;
       headers[key] = value;
     }
     
-    // Параметры запроса
     const fetchOptions = {
       method: method,
       headers: headers,
     };
     
-    // Добавляем тело для POST/PUT/PATCH
+    // Добавляем тело для методов, которые могут его иметь
     if (method !== 'GET' && method !== 'HEAD' && req.body) {
       fetchOptions.body = JSON.stringify(req.body);
     }
     
-    // Отправляем запрос к Supabase
     const response = await fetch(fetchUrl, fetchOptions);
     const data = await response.json();
     
-    // Отправляем ответ с CORS
     res.writeHead(response.status, {
       ...corsHeaders,
       'Content-Type': 'application/json',
