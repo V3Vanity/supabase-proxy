@@ -1,59 +1,62 @@
 export default async function handler(req, res) {
-  // Supabase URL
   const SUPABASE_URL = 'https://vimfydojltitzoibxsfn.supabase.co';
   
   // Получаем путь из запроса
-  const fullUrl = req.url;
-  // Убираем /api/supabase из пути, оставляем остальное
-  let path = fullUrl.replace('/api/supabase', '');
+  let path = req.url;
   
-  // Если путь пустой, отправляем корневой запрос
+  // Убираем /api/supabase из начала пути
+  if (path.startsWith('/api/supabase')) {
+    path = path.replace('/api/supabase', '');
+  }
+  
+  // Если путь пустой или /, отправляем на /auth/v1/health
   if (!path || path === '/') {
-    path = '';
+    path = '/auth/v1/health';
   }
   
   const targetUrl = SUPABASE_URL + path;
+  const method = req.method;
   
-  console.log(`Прокси: ${req.method} ${targetUrl}`);
+  console.log(`📡 Прокси: ${method} ${targetUrl}`);
   
-  // Устанавливаем CORS заголовки
+  // CORS заголовки — обязательные
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, apikey');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, apikey, Prefer, X-Client-Info');
+  res.setHeader('Access-Control-Max-Age', '86400');
   
   // Обработка предзапроса OPTIONS
-  if (req.method === 'OPTIONS') {
-    return res.status(204).end();
+  if (method === 'OPTIONS') {
+    res.status(204).end();
+    return;
   }
   
   try {
-    // Подготавливаем заголовки для запроса к Supabase
-    const headers = {
-      'apikey': req.headers.apikey,
-      'Authorization': req.headers.authorization,
-      'Content-Type': req.headers['content-type'] || 'application/json',
-    };
+    // Подготавливаем заголовки для Supabase
+    const headers = {};
     
-    // Опции для fetch
+    // Копируем только нужные заголовки
+    if (req.headers.apikey) headers['apikey'] = req.headers.apikey;
+    if (req.headers.authorization) headers['Authorization'] = req.headers.authorization;
+    if (req.headers['content-type']) headers['Content-Type'] = req.headers['content-type'];
+    
     const fetchOptions = {
-      method: req.method,
+      method: method,
       headers: headers,
     };
     
-    // Добавляем тело запроса для POST/PUT/PATCH
-    if (req.method !== 'GET' && req.body) {
+    // Добавляем тело для POST/PUT/PATCH
+    if (method !== 'GET' && method !== 'HEAD' && req.body) {
       fetchOptions.body = JSON.stringify(req.body);
     }
     
-    // Отправляем запрос к Supabase
     const response = await fetch(targetUrl, fetchOptions);
     const data = await response.json();
     
-    // Отправляем ответ клиенту
     res.status(response.status).json(data);
     
   } catch (error) {
-    console.error('Ошибка прокси:', error);
+    console.error('❌ Ошибка:', error);
     res.status(500).json({ error: error.message });
   }
 }
